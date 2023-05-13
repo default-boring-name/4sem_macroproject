@@ -116,6 +116,67 @@ def assemble_2D_nabla_form(u_trial, v_test, prod_matrix):
     nabla_2D = np.kron(nabla_matrix, prod_matrix) + np.kron(prod_matrix, nabla_matrix)
     return nabla_2D
 
+def assemble_bilin_term(hamilton_term, prod_2D, N):
+    bilin = np.zeros((2*N, 2*N))
+    bilin[:N,:N] = hamilton_term[:]
+    bilin[N:2 * N, N:2*N] = hamilton_term[:]
+    bilin[:N,N:2*N] = prod_2D[:]
+    bilin[N:2*N,:N] = -prod_2D[:]
+    return bilin
+
+def apply_bc_bilin_term(bilinear_term, global_boundary_dofs, N):
+    K = np.zeros((N, N))
+    for i in global_boundary_dofs:
+        K[i,i] = 1
+    bilinear_term[global_boundary_dofs, :N] = K[global_boundary_dofs, :]
+    bilinear_term[N + global_boundary_dofs, N:2*N] = K[global_boundary_dofs, :]
+
+def get_linear_term(psi0_re, psi0_im, prod_matrix, global_boundary_dofs, N):
+    re_term = np.dot(prod_matrix, psi0_im)
+    im_term = np.dot(prod_matrix, psi0_re)
+
+    re_term[global_boundary_dofs] = np.zeros(len(global_boundary_dofs))
+    im_term[global_boundary_dofs] = np.zeros(len(global_boundary_dofs))
+
+    lin_term = np.zeros(2 * N)
+    lin_term[:N] = re_term[:]
+    lin_term[N:2*N] = -im_term[:]
+
+    return lin_term
+
+def normalize(psi_re, psi_im, N_dof):
+    norm_vect = psi_re * psi_re + psi_im * psi_im
+    norm_func = dl.Function(V)
+    norm_dx = np.zeros((N_dof))
+    for a in range(N_dof):
+        norm_func.vector()[:] = np.array(norm_vect[a::N_dof])
+        norm_form = norm_func * dl.dx
+        norm_dx[a] = dl.assemble(norm_form)
+
+    norm_dx_func = dl.Function(V)
+    norm_dx_func.vector()[:] = norm_dx
+    norm_dx_form = norm_dx_func * dl.dx
+    norm = np.sqrt(dl.assemble(norm_dx_form))
+    psi_re = psi_re / norm
+    psi_im = psi_im / norm
+    return psi_re, psi_im
+
+def get_rho(psi_re, psi_im, N_dof):
+    prob_vect = psi_re * psi_re + psi_im * psi_im
+    prob_func = dl.Function(V)
+    rho_1 = np.zeros((N_dof))
+    rho_2 = np.zeros((N_dof))
+    for a in range(N_dof):
+        prob_func.vector()[:] = np.array(prob_vect[a::N_dof])
+        prob_form = prob_func * dl.dx
+        rho_1[a] = dl.assemble(prob_form)
+    for a in range(N_dof):
+        prob_func.vector()[:] = prob_vect[a * N_dof:(a + 1) * N_dof]
+        prob_form = prob_func * dl.dx
+        rho_2[a] = dl.assemble(prob_form)
+
+    return rho_1 + rho_2
+
 T = 1
 num_steps = 50
 dt = T / num_steps
