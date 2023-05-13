@@ -211,9 +211,37 @@ interact_vect =  a * np.exp(-np.abs(x - y) / L)
 
 psi0_re = np.exp(-20*((x + 0.6 ) ** 2)) + np.exp(-20*((y - 0.6) ** 2))
 psi0_im = np.zeros(N_global_dof)
+psi0_re, psi0_im = normalize(psi0_re, psi0_im, N_dof)
+
 
 nabla_2D = assemble_2D_nabla_form(u_trial, v_test, prod_matrix)
 potential_2D = assemble_2D_potential(potent_expr, V, u_trial, v_test, prod_matrix)
 interact_2D = assemble_2D_interact(interact_vect, V, N_dof, u_trial, v_test)
 
 hamilton_term = (nabla_2D / (2) + potential_2D + interact_2D) * dt
+
+bilinear_term = assemble_bilin_term(hamilton_term, prod_2D, N_global_dof)
+
+apply_bc_bilin_term(bilinear_term, global_boundary_dofs, N_global_dof)
+
+psi = np.zeros(2 *  N_global_dof)
+psi_re = np.zeros(N_global_dof)
+psi_im = np.zeros(N_global_dof)
+
+
+rho_data = []
+prob_data = []
+fig,  ax = plt.subplots()
+for i in range(num_steps):
+    linear_term = get_linear_term(psi0_re, psi0_im, prod_2D, global_boundary_dofs, N_global_dof)
+    psi = np.linalg.solve(bilinear_term, linear_term)
+    psi_re = psi[:N_global_dof]
+    psi_im = psi[N_global_dof:2*N_global_dof]
+    psi_re, psi_im = normalize(psi_re, psi_im, N_dof)
+
+    psi0_re = psi_re
+    psi0_im = psi_im
+
+    rho = get_rho(psi_re, psi_im, N_dof)
+    rho_data.append(rho)
+    prob_data.append(psi_re * psi_re + psi_im * psi_im)
